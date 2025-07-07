@@ -1,0 +1,204 @@
+# Define reusable templates
+x-common-properties: &common-properties
+  restart: unless-stopped
+  networks:
+    - arr-network
+  environment:
+    - PUID=${PUID}
+    - PGID=${PGID}
+    - TZ=${TZ}
+  labels:
+    - "com.centurylinklabs.watchtower.enable=true"
+
+x-arr-healthcheck: &arr-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+
+services:
+  qbittorrent:
+    <<: *common-properties
+    image: ${QBITTORRENT_IMAGE}
+    container_name: qbittorrent
+    environment:
+      # PUID, PGID, TZ are inherited from common-properties
+      - UMASK=${UMASK}
+      - WEBUI_PORT=${QBITTORRENT_PORT}
+    volumes:
+      - qbittorrent_config:/config
+      - ${DATA_PATH}:/data
+    ports:
+      - ${QBITTORRENT_PORT}:${QBITTORRENT_PORT}
+      - 6881:6881
+      - 6881:6881/udp
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:${QBITTORRENT_PORT}"]
+
+  prowlarr:
+    <<: *common-properties
+    image: ${PROWLARR_IMAGE}
+    container_name: prowlarr
+    volumes:
+      - prowlarr_config:/config
+    ports:
+      - ${PROWLARR_PORT}:${PROWLARR_PORT}
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${PROWLARR_PORT}/ping"]
+
+  sonarr:
+    <<: *common-properties
+    image: ${SONARR_IMAGE}
+    container_name: sonarr
+    volumes:
+      - sonarr_config:/config
+      - ${DATA_PATH}:/data
+    ports:
+      - ${SONARR_PORT}:${SONARR_PORT}
+    depends_on:
+      qbittorrent: { condition: service_healthy }
+      prowlarr: { condition: service_healthy }
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${SONARR_PORT}/ping"]
+
+  radarr:
+    <<: *common-properties
+    image: ${RADARR_IMAGE}
+    container_name: radarr
+    volumes:
+      - radarr_config:/config
+      - ${DATA_PATH}:/data
+    ports:
+      - ${RADARR_PORT}:${RADARR_PORT}
+    depends_on:
+      qbittorrent: { condition: service_healthy }
+      prowlarr: { condition: service_healthy }
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${RADARR_PORT}/ping"]
+
+  lidarr:
+    <<: *common-properties
+    image: ${LIDARR_IMAGE}
+    container_name: lidarr
+    volumes:
+      - lidarr_config:/config
+      - ${DATA_PATH}:/data
+    ports:
+      - ${LIDARR_PORT}:${LIDARR_PORT}
+    depends_on:
+      qbittorrent: { condition: service_healthy }
+      prowlarr: { condition: service_healthy }
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${LIDARR_PORT}/ping"]
+
+  bazarr:
+    <<: *common-properties
+    image: ${BAZARR_IMAGE}
+    container_name: bazarr
+    volumes:
+      - bazarr_config:/config
+      - ${DATA_PATH}:/data
+    ports:
+      - ${BAZARR_PORT}:${BAZARR_PORT}
+    depends_on:
+      sonarr: { condition: service_healthy }
+      radarr: { condition: service_healthy }
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:${BAZARR_PORT}"]
+
+  flaresolverr:
+    <<: *common-properties # Now also inherits TZ and restart policy
+    image: ${FLARESOLVERR_IMAGE}
+    container_name: flaresolverr
+    ports:
+      - ${FLARESOLVERR_PORT}:${FLARESOLVERR_PORT}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${FLARESOLVERR_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  tdarr:
+    <<: *common-properties
+    image: ${TDARR_IMAGE}
+    container_name: tdarr
+    environment:
+      # PUID, PGID, TZ are inherited
+      - UMASK_SET=${UMASK}
+      - serverIP=0.0.0.0
+      - serverPort=${TDARR_SERVER_PORT}
+      - webUIPort=${TDARR_WEBUI_PORT}
+      - internalNode=true
+      - inContainer=true
+      - nodeName=InternalNode
+    volumes:
+      - tdarr_server:/app/server
+      - tdarr_configs:/app/configs
+      - tdarr_logs:/app/logs
+      - tdarr_cache:/temp
+      - ${DATA_PATH}:/data
+      - ${TDARR_PLUGINS_PATH}:/app/server/Tdarr/Plugins/Local
+    ports:
+      - ${TDARR_WEBUI_PORT}:${TDARR_WEBUI_PORT}
+      - ${TDARR_SERVER_PORT}:${TDARR_SERVER_PORT}
+    healthcheck:
+      <<: *arr-healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:${TDARR_WEBUI_PORT}"]
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_MONITOR_ONLY=true # Only updates containers with the label
+      - WATCHTOWER_NOTIFICATIONS_LEVEL=info
+      - TZ=${TZ}
+    networks:
+      - arr-network
+    restart: unless-stopped
+    # No label here, so Watchtower doesn't update itself by default
+
+  portainer:
+    image: ${PORTAINER_IMAGE}
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - 9000:9000
+      - 9443:9443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+      - ${PORTAINER_LICENSE}:/license
+    networks:
+      - arr-network
+    # Add label if Portainer should be auto-updated
+    # labels:
+    #   - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  qbittorrent_config:
+  prowlarr_config:
+  sonarr_config:
+  radarr_config:
+  lidarr_config:
+  bazarr_config:
+  tdarr_server:
+  tdarr_configs:
+  tdarr_logs:
+  tdarr_cache:
+  portainer_data:
+
+networks:
+  arr-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: br-arr

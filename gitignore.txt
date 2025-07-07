@@ -1,0 +1,21 @@
+# --- Personlige konfigurationsfiler ---
+# Ignorer den personlige .env fil, men behold .env.example i repoet.
+.env
+
+# --- Backup- og logfiler ---
+# Ignorer mappen med backups og individuelle logfiler.
+backups/
+*.log
+
+# --- Midlertidige filer og OS-specifikke filer ---
+*.tmp
+*.temp
+*.original
+.DS_Store
+Thumbs.db
+
+# --- IDE/Editor specifikke filer ---
+.vscode/
+.idea/
+*.swp
+*.swo
