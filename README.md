@@ -1,33 +1,38 @@
 # ARR Stack Docker Compose Setup
 
-## 🎯 Hvad er dette?
-Et professionelt, portabelt docker-compose setup til hele din ARR-stack med enterprise-grade backup system. Inkluderer Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Tdarr, qBittorrent, FlareSolverr og Portainer - optimeret til nem vedligeholdelse og cross-platform brug.
+## 🎯 What is this?
+A professional, portable docker-compose setup for your entire ARR stack with an enterprise-grade backup system. Includes Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Tdarr, qBittorrent, FlareSolverr, and Portainer – optimized for easy maintenance and cross-platform use.
 
 ---
 
-## 🚀 Hurtig Start
+## 🚀 Quick Start
 
-1. **Kopier `.env.example` til `.env` og tilpas værdierne**  
-   
+> **Note:** If you downloaded these files from Claude, you'll need to rename two files first:
+> - Rename `.gitignore.txt` → `.gitignore`
+> - Rename `.env.example.txt` → `.env.example`
+
+1. **Create your configuration file**
+
    Linux/macOS:
    ```bash
    cp .env.example .env
    ```
-   
+
    Windows PowerShell:
    ```powershell
    Copy-Item .env.example .env
    ```
-   
-   - Linux: Brug stier som `/mnt/docker/data`
-   - Windows: Brug stier som `D:\docker\data`
 
-2. **Start hele stacken**
+2. **Adjust the paths in `.env` for your system**
+   - Linux: Use paths like `/mnt/docker/data`
+   - Windows: Use paths like `D:\docker\data`
+
+3. **Start the entire stack**
    ```bash
    docker compose up -d
    ```
 
-3. **Verificer at alt kører**
+4. **Verify everything is running**
    ```bash
    docker compose ps
    ```
@@ -37,44 +42,44 @@ Et professionelt, portabelt docker-compose setup til hele din ARR-stack med ente
 ## ✨ Features
 
 ### Core Features
-- **Genanvendelige YAML-ankre**: Centraliseret konfiguration
-- **Miljøvariabel-drevet**: Alt styres fra `.env` filen
-- **Healthchecks**: På alle kritiske services
-- **Auto-opdatering**: Via Watchtower med granular kontrol
+- **Reusable YAML anchors**: Centralized configuration
+- **Environment variable driven**: Everything is controlled from the `.env` file
+- **Healthchecks**: On all critical services
+- **Auto-updating**: Via Watchtower with granular control
 - **Portainer EE**: Enterprise Docker management interface
 
 ### Backup System (v3.0)
-- **Fuld volume backup**: Alle configs og data
-- **Kryptering**: AES-256 via 7-Zip
-- **Cloud sync**: Automatisk upload til Google Drive, OneDrive, etc.
-- **Retention policies**: Automatisk sletning af gamle backups
-- **Selective restore**: Gendan kun specifikke volumes
-- **Pre-flight checks**: Container health og disk plads verifikation
-- **Progress tracking**: Real-time status under backup
-- **Notifikationer**: Discord/Slack webhook support
+- **Full volume backup**: All configs and data
+- **Encryption**: AES-256 via 7-Zip
+- **Cloud sync**: Automatic upload to Google Drive, OneDrive, etc.
+- **Retention policies**: Automatic deletion of old backups
+- **Selective restore**: Restore only specific volumes
+- **Pre-flight checks**: Container health and disk space verification
+- **Progress tracking**: Real-time status during backup
+- **Notifications**: Discord/Slack webhook support
 
 ---
 
-## 📦 Inkluderede Services
+## 📦 Included Services
 
-| Service | Port | Beskrivelse |
-|---------|------|-------------|
-| qBittorrent | 8080 | Torrent klient |
-| Prowlarr | 9696 | Indexer manager |
-| Sonarr | 8989 | TV serie automation |
-| Radarr | 7878 | Film automation |
-| Lidarr | 8686 | Musik automation |
-| Bazarr | 6767 | Undertekst automation |
-| FlareSolverr | 8191 | Cloudflare bypass |
-| Tdarr | 8265 | Media transcoding |
-| Portainer | 9443 | Docker management |
-| Watchtower | - | Container updater |
+| Service       | Port  | Description           |
+|---------------|-------|-----------------------|
+| qBittorrent   | 8080  | Torrent client        |
+| Prowlarr      | 9696  | Indexer manager       |
+| Sonarr        | 8989  | TV series automation  |
+| Radarr        | 7878  | Movie automation      |
+| Lidarr        | 8686  | Music automation      |
+| Bazarr        | 6767  | Subtitle automation   |
+| FlareSolverr  | 8191  | Cloudflare bypass     |
+| Tdarr         | 8265  | Media transcoding     |
+| Portainer     | 9443  | Docker management     |
+| Watchtower    | -     | Container updater     |
 
 ---
 
-## 🔧 Konfiguration
+## 🔧 Configuration
 
-### Basis .env Eksempel
+### Basic .env Example
 ```env
 # System
 PUID=1000
@@ -82,128 +87,128 @@ PGID=1000
 UMASK=002
 TZ=Europe/Copenhagen
 
-# Paths (tilpas til dit system)
+# Paths (adjust for your system)
 DATA_PATH=/mnt/docker/data
 TDARR_PLUGINS_PATH=/mnt/docker/tdarr/plugins
 PORTAINER_LICENSE=/mnt/docker/portainer/portainer.lic
 
-# Backup (valgfri)
+# Backup (optional)
 BACKUP_NOTIFICATION_WEBHOOK=https://discord.com/api/webhooks/...
 ```
 
-### Porte
-Alle porte kan ændres i `.env` hvis du har konflikter:
+### Ports
+All ports can be changed in `.env` if you have conflicts:
 ```env
 SONARR_PORT=8989
 RADARR_PORT=7878
-# osv...
+# etc...
 ```
 
 ---
 
 ## 💾 Backup & Restore
 
-### Automatisk Backup
+### Automatic Backup
 ```powershell
 # Standard backup
 .\backup-arr-stack.ps1
 
-# Krypteret backup
+# Encrypted backup
 .\backup-arr-stack.ps1 -Encrypt -Password (Read-Host -AsSecureString)
 
-# Backup med cloud upload
+# Backup with cloud upload
 .\backup-arr-stack.ps1 -UploadToCloud -CloudRemote "gdrive:backups"
 
-# Fuld backup inkl. media
+# Full backup incl. media
 .\backup-arr-stack.ps1 -IncludeMedia -Encrypt -UploadToCloud
 
-# Custom 7-Zip lokation
+# Custom 7-Zip location
 .\backup-arr-stack.ps1 -Encrypt -SevenZipPath "D:\Tools\7-Zip\7z.exe"
 ```
 
-Se [backup-arr-stack.ps1](backup-arr-stack.ps1) for komplet dokumentation af alle backup muligheder.
+See [backup-arr-stack.ps1](backup-arr-stack.ps1) for full documentation of all backup options.
 
 ### Restore
 ```powershell
-# Fuld restore
-.\backups\restore_[dato].ps1
+# Full restore
+.\backups\restore_[date].ps1
 
 # Selective restore
-.\backups\restore_[dato].ps1 -SelectiveRestore
+.\backups\restore_[date].ps1 -SelectiveRestore
 ```
 
 ### Scheduled Backup
-Opret en Windows Task eller Linux cron job:
+Create a Windows Task or Linux cron job:
 ```bash
-# Linux crontab eksempel (daglig kl. 3:00)
+# Linux crontab example (daily at 3:00 AM)
 0 3 * * * cd /path/to/arr-stack && pwsh backup-arr-stack.ps1 -UploadToCloud
 ```
 
 ---
 
-## 🔄 Migration mellem systemer
+## 🔄 Migration between systems
 
-1. **På kilde system:**
+1. **On the source system:**
    ```powershell
    .\backup-arr-stack.ps1 -Encrypt
    ```
 
-2. **Kopier til nyt system:**
-   - Backup filen
+2. **Copy to the new system:**
+   - The backup file
    - docker-compose.yml
-   - .env (tilpas stier!)
+   - .env (adjust paths!)
 
-3. **På destination system:**
+3. **On the target system:**
    ```powershell
-   .\restore_[dato].ps1
+   .\restore_[date].ps1
    ```
 
 ---
 
-## 🔧 Opdatering af Services
+## 🔧 Updating Services
 
-### Opdater alle images til nyeste version
+### Update all images to the latest version
 ```bash
-# Pull nyeste images
+# Pull latest images
 docker compose pull
 
-# Genstart med nye images
+# Restart with new images
 docker compose up -d
 
-# Fjern gamle unused images
+# Remove old unused images
 docker image prune
 ```
 
-### Opdater specifik service
+### Update specific service
 ```bash
-# Opdater kun Sonarr
+# Update only Sonarr
 docker compose pull sonarr
 docker compose up -d sonarr
 ```
 
-### Rollback til tidligere version
-Rediger image tag i `.env`:
+### Rollback to previous version
+Edit the image tag in `.env`:
 ```env
 SONARR_IMAGE=lscr.io/linuxserver/sonarr:3.0.10
 ```
-Derefter:
+Then:
 ```bash
 docker compose up -d sonarr
 ```
 
 ---
 
-## 🛠️ Avanceret Brug
+## 🛠️ Advanced Usage
 
-### Kun opdater specifikke services
-Rediger Watchtower labels i `docker-compose.yml`:
+### Only update specific services
+Edit Watchtower labels in `docker-compose.yml`:
 ```yaml
 labels:
   - "com.centurylinklabs.watchtower.enable=false"
 ```
 
-### Tilføj ekstra services
-Brug de eksisterende YAML ankre:
+### Add extra services
+Use the existing YAML anchors:
 ```yaml
 my-service:
   <<: *common-properties
@@ -228,56 +233,56 @@ tdarr:
 
 ### Container status
 ```bash
-# Se alle containers
+# See all containers
 docker compose ps
 
-# Se logs for specifik service
+# View logs for a specific service
 docker compose logs -f sonarr
 
-# Se resource forbrug
+# See resource usage
 docker stats
 ```
 
 ### Portainer Dashboard
-Tilgå Portainer på: https://localhost:9443
+Access Portainer at: https://localhost:9443
 
 ---
 
 ## 🚨 Troubleshooting
 
-### Container starter ikke
+### Container won't start
 ```bash
 # Check logs
-docker compose logs [service-navn]
+docker compose logs [service-name]
 
-# Genstart service
-docker compose restart [service-navn]
+# Restart service
+docker compose restart [service-name]
 ```
 
-### Permission problemer
-Verificer PUID/PGID matcher din bruger:
+### Permission issues
+Verify PUID/PGID matches your user:
 ```bash
 id $USER
 ```
 
-### Disk plads
+### Disk space
 ```bash
 # Check Docker volumes
 docker system df
 
-# Ryd op
+# Clean up
 docker system prune -a
 ```
 
 ---
 
-## 🔐 Sikkerhed
+## 🔐 Security
 
-- Kør aldrig som root (brug PUID/PGID)
-- Brug stærke passwords
-- Aktiver 2FA i Portainer
-- Overvej VPN for remote access
-- Hold images opdateret via Watchtower
+- Never run as root (use PUID/PGID)
+- Use strong passwords
+- Enable 2FA in Portainer
+- Consider VPN for remote access
+- Keep images updated via Watchtower
 
 ---
 
@@ -291,25 +296,25 @@ docker system prune -a
 
 ## 🤝 Support
 
-Har du problemer eller forslag?
-- Opret et GitHub issue
-- Check logs først: `docker compose logs`
-- Inkluder din `.env` (uden passwords!) og `docker compose ps` output
+Having issues or suggestions?
+- Create a GitHub issue
+- Check logs first: `docker compose logs`
+- Include your `.env` (without passwords!) and `docker compose ps` output
 
 ---
 
 ## 📝 Changelog
 
 ### v3.0 (2024)
-- Tilføjet avanceret backup system
+- Added advanced backup system
 - Portainer data volume
 - Tdarr cache volume  
 - FlareSolverr healthcheck
-- Forbedret dokumentation
+- Improved documentation
 
 ### v2.0
-- YAML ankre implementation
-- Miljøvariabel-drevet config
+- YAML anchor implementation
+- Environment variable-driven config
 - Cross-platform support
 
 ### v1.0
