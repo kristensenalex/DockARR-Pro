@@ -16,25 +16,32 @@ x-arr-healthcheck: &arr-healthcheck
   retries: 3
 
 services:
-  qbittorrent:
+  # =====================================
+  # DOWNLOAD CLIENT - DELUGE
+  # =====================================
+  deluge:
     <<: *common-properties
-    image: ${QBITTORRENT_IMAGE}
-    container_name: qbittorrent
+    image: lscr.io/linuxserver/deluge:latest
+    container_name: deluge
     environment:
       # PUID, PGID, TZ are inherited from common-properties
-      - UMASK=${UMASK}
-      - WEBUI_PORT=${QBITTORRENT_PORT}
+      - DELUGE_LOGLEVEL=error
     volumes:
-      - qbittorrent_config:/config
+      - deluge_config:/config
       - ${DATA_PATH}:/data
+      - ${DATA_PATH}/torrents:/downloads
+      - ${DATA_PATH}/media:/media
     ports:
-      - ${QBITTORRENT_PORT}:${QBITTORRENT_PORT}
+      - 8112:8112
       - 6881:6881
       - 6881:6881/udp
     healthcheck:
       <<: *arr-healthcheck
-      test: ["CMD", "curl", "-f", "http://localhost:${QBITTORRENT_PORT}"]
+      test: ["CMD", "curl", "-f", "http://localhost:8112"]
 
+  # =====================================
+  # INDEXER MANAGEMENT
+  # =====================================
   prowlarr:
     <<: *common-properties
     image: ${PROWLARR_IMAGE}
@@ -47,6 +54,9 @@ services:
       <<: *arr-healthcheck
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${PROWLARR_PORT}/ping"]
 
+  # =====================================
+  # TV SHOWS MANAGEMENT
+  # =====================================
   sonarr:
     <<: *common-properties
     image: ${SONARR_IMAGE}
@@ -57,12 +67,15 @@ services:
     ports:
       - ${SONARR_PORT}:${SONARR_PORT}
     depends_on:
-      qbittorrent: { condition: service_healthy }
+      deluge: { condition: service_healthy }
       prowlarr: { condition: service_healthy }
     healthcheck:
       <<: *arr-healthcheck
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${SONARR_PORT}/ping"]
 
+  # =====================================
+  # MOVIES MANAGEMENT
+  # =====================================
   radarr:
     <<: *common-properties
     image: ${RADARR_IMAGE}
@@ -73,12 +86,15 @@ services:
     ports:
       - ${RADARR_PORT}:${RADARR_PORT}
     depends_on:
-      qbittorrent: { condition: service_healthy }
+      deluge: { condition: service_healthy }
       prowlarr: { condition: service_healthy }
     healthcheck:
       <<: *arr-healthcheck
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${RADARR_PORT}/ping"]
 
+  # =====================================
+  # MUSIC MANAGEMENT
+  # =====================================
   lidarr:
     <<: *common-properties
     image: ${LIDARR_IMAGE}
@@ -89,12 +105,15 @@ services:
     ports:
       - ${LIDARR_PORT}:${LIDARR_PORT}
     depends_on:
-      qbittorrent: { condition: service_healthy }
+      deluge: { condition: service_healthy }
       prowlarr: { condition: service_healthy }
     healthcheck:
       <<: *arr-healthcheck
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${LIDARR_PORT}/ping"]
 
+  # =====================================
+  # SUBTITLE MANAGEMENT
+  # =====================================
   bazarr:
     <<: *common-properties
     image: ${BAZARR_IMAGE}
@@ -111,8 +130,11 @@ services:
       <<: *arr-healthcheck
       test: ["CMD", "curl", "-f", "http://localhost:${BAZARR_PORT}"]
 
+  # =====================================
+  # CLOUDFLARE BYPASS
+  # =====================================
   flaresolverr:
-    <<: *common-properties # Now also inherits TZ and restart policy
+    <<: *common-properties
     image: ${FLARESOLVERR_IMAGE}
     container_name: flaresolverr
     ports:
@@ -123,6 +145,9 @@ services:
       timeout: 10s
       retries: 3
 
+  # =====================================
+  # MEDIA TRANSCODING
+  # =====================================
   tdarr:
     <<: *common-properties
     image: ${TDARR_IMAGE}
@@ -150,20 +175,25 @@ services:
       <<: *arr-healthcheck
       test: ["CMD", "curl", "-f", "http://localhost:${TDARR_WEBUI_PORT}"]
 
+  # =====================================
+  # AUTO UPDATER
+  # =====================================
   watchtower:
     image: containrrr/watchtower
     container_name: watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - WATCHTOWER_MONITOR_ONLY=true # Only updates containers with the label
+      - WATCHTOWER_MONITOR_ONLY=true
       - WATCHTOWER_NOTIFICATIONS_LEVEL=info
       - TZ=${TZ}
     networks:
       - arr-network
     restart: unless-stopped
-    # No label here, so Watchtower doesn't update itself by default
 
+  # =====================================
+  # CONTAINER MANAGEMENT
+  # =====================================
   portainer:
     image: ${PORTAINER_IMAGE}
     container_name: portainer
@@ -177,12 +207,9 @@ services:
       - ${PORTAINER_LICENSE}:/license
     networks:
       - arr-network
-    # Add label if Portainer should be auto-updated
-    # labels:
-    #   - "com.centurylinklabs.watchtower.enable=true"
 
 volumes:
-  qbittorrent_config:
+  deluge_config:
   prowlarr_config:
   sonarr_config:
   radarr_config:
