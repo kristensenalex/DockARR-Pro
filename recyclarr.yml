@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
+
+# Fully automatic Recyclarr configuration
+# Now uses environment variables for API keys
+
+sonarr:
+  sonarr_main:
+    base_url: http://localhost:8989
+    api_key: !env_var SONARR_API_KEY
+    
+    # Everything is handled automatically via templates
+    include:
+      # Quality definitions for TV series
+      - template: sonarr-quality-definition-series
+      
+      # WEB-1080p quality profile with ALL custom formats
+      - template: sonarr-v4-quality-profile-web-1080p
+      
+      # Custom formats are automatically included:
+      # - Unwanted formats (BR-DISK, LQ, x265-HD, Extras, AV1)
+      # - Repack/Proper v1, v2, v3
+      # - Streaming services (AMZN, ATVP, DSNP, HMAX, NF, etc.)
+      # - HQ Source Groups (WEB Tier 01-03, WEB Scene)
+      # - Optional formats (Bad Dual Groups, No-RlsGroup, Obfuscated, Retags, Scene)
+      - template: sonarr-v4-custom-formats-web-1080p
+
+radarr:
+  radarr_main:
+    base_url: http://localhost:7878
+    api_key: !env_var RADARR_API_KEY
+    
+    # Everything is handled automatically via templates
+    include:
+      # Movie quality definitions
+      - template: radarr-quality-definition-movie
+      
+      # HD Bluray + WEB profile
+      # Automatically includes ALL formats from your list:
+      # - HD Bluray Tiers, WEB Tiers
+      # - Repacks, Unwanted, Streaming Services
+      # - Movie Versions (IMAX, Special Edition, etc.)
+      - template: radarr-quality-profile-hd-bluray-web
+      - template: radarr-custom-formats-hd-bluray-web
+      
+      # Remux + WEB 1080p profile
+      # Automatically includes ALL formats from your list:
+      # - Remux Tiers, WEB Tiers, Audio formats
+      # - Repacks, Unwanted, Streaming Services
+      # - Movie Versions (IMAX, Special Edition, etc.)
+      - template: radarr-quality-profile-remux-web-1080p
+      - template: radarr-custom-formats-remux-web-1080p
