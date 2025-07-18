@@ -1,159 +1,343 @@
-# Define reusable templates
+# -------------------------------------------------------------------
+# Reusable templates
+# -------------------------------------------------------------------
 x-common-properties: &common-properties
   restart: unless-stopped
-  networks:
-    - arr-network
   environment:
     - PUID=${PUID}
     - PGID=${PGID}
     - TZ=${TZ}
   labels:
     - "com.centurylinklabs.watchtower.enable=true"
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+      labels: "service,environment"
 
-x-arr-healthcheck: &arr-healthcheck
+# --- Healthchecks --------------------------------------------------
+x-transmission-healthcheck: &transmission-healthcheck
+  # Fixed to include username and password authentication
+  test: ["CMD", "curl", "-f", "-u", "${TRANSMISSION_USER}:${TRANSMISSION_PASS}", "http://localhost:9091/transmission/web/"]
   interval: 30s
   timeout: 10s
   retries: 3
+  start_period: 30s
+
+x-prowlarr-healthcheck: &prowlarr-healthcheck
+  test: ["CMD", "curl", "-f", "-H", "X-Api-Key: ${PROWLARR_API_KEY}", "http://localhost:${PROWLARR_PORT}/ping"]
+  interval: 2m
+  timeout: 10s
+  retries: 3
+
+x-sonarr-healthcheck: &sonarr-healthcheck
+  test: ["CMD", "curl", "-f", "-H", "X-Api-Key: ${SONARR_API_KEY}", "http://localhost:${SONARR_PORT}/api/v3/system/status"]
+  interval: 2m
+  timeout: 10s
+  retries: 3
+
+x-radarr-healthcheck: &radarr-healthcheck
+  test: ["CMD", "curl", "-f", "-H", "X-Api-Key: ${RADARR_API_KEY}", "http://localhost:${RADARR_PORT}/api/v3/system/status"]
+  interval: 2m
+  timeout: 10s
+  retries: 3
+
+x-lidarr-healthcheck: &lidarr-healthcheck
+  test: ["CMD", "curl", "-f", "-H", "X-Api-Key: ${LIDARR_API_KEY}", "http://localhost:${LIDARR_PORT}/api/v1/system/status"]
+  interval: 2m
+  timeout: 10s
+  retries: 3
+
+x-bazarr-healthcheck: &bazarr-healthcheck
+  test: ["CMD", "curl", "-f", "-H", "X-Api-Key: ${BAZARR_API_KEY}", "http://localhost:${BAZARR_PORT}/api/system/status"]
+  interval: 2m
+  timeout: 10s
+  retries: 3
+
+x-overseerr-healthcheck: &overseerr-healthcheck
+  test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${OVERSEERR_PORT}/api/v1/status"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+
+x-recyclarr-healthcheck: &recyclarr-healthcheck
+  test: ["CMD", "test", "-f", "/config/recyclarr.yml"]
+  interval: 5m
+  timeout: 10s
+  retries: 2
 
 services:
-  # =====================================
-  # DOWNLOAD CLIENT - DELUGE
-  # =====================================
-  deluge:
-    <<: *common-properties
-    image: lscr.io/linuxserver/deluge:latest
-    container_name: deluge
-    environment:
-      # PUID, PGID, TZ are inherited from common-properties
-      - DELUGE_LOGLEVEL=error
-    volumes:
-      - deluge_config:/config
-      - ${DATA_PATH}:/data
-      - ${DATA_PATH}/torrents:/downloads
-      - ${DATA_PATH}/media:/media
+  # -----------------------------------------------------------------
+  # VPN CONTAINER - MULLVAD WIREGUARD (gluetun)
+  # -----------------------------------------------------------------
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - arr-network
     ports:
-      - 8112:8112
-      - 6881:6881
-      - 6881:6881/udp
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "curl", "-f", "http://localhost:8112"]
-
-  # =====================================
-  # INDEXER MANAGEMENT
-  # =====================================
-  prowlarr:
-    <<: *common-properties
-    image: ${PROWLARR_IMAGE}
-    container_name: prowlarr
-    volumes:
-      - prowlarr_config:/config
-    ports:
+      # Expose ports for services behind VPN
+      - ${TRANSMISSION_PORT}:9091          # Transmission WebUI
+      - 51413:51413                        # Transmission peer
+      - 51413:51413/udp
       - ${PROWLARR_PORT}:${PROWLARR_PORT}
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${PROWLARR_PORT}/ping"]
-
-  # =====================================
-  # TV SHOWS MANAGEMENT
-  # =====================================
-  sonarr:
-    <<: *common-properties
-    image: ${SONARR_IMAGE}
-    container_name: sonarr
-    volumes:
-      - sonarr_config:/config
-      - ${DATA_PATH}:/data
-    ports:
       - ${SONARR_PORT}:${SONARR_PORT}
-    depends_on:
-      deluge: { condition: service_healthy }
-      prowlarr: { condition: service_healthy }
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${SONARR_PORT}/ping"]
-
-  # =====================================
-  # MOVIES MANAGEMENT
-  # =====================================
-  radarr:
-    <<: *common-properties
-    image: ${RADARR_IMAGE}
-    container_name: radarr
-    volumes:
-      - radarr_config:/config
-      - ${DATA_PATH}:/data
-    ports:
       - ${RADARR_PORT}:${RADARR_PORT}
-    depends_on:
-      deluge: { condition: service_healthy }
-      prowlarr: { condition: service_healthy }
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${RADARR_PORT}/ping"]
-
-  # =====================================
-  # MUSIC MANAGEMENT
-  # =====================================
-  lidarr:
-    <<: *common-properties
-    image: ${LIDARR_IMAGE}
-    container_name: lidarr
-    volumes:
-      - lidarr_config:/config
-      - ${DATA_PATH}:/data
-    ports:
       - ${LIDARR_PORT}:${LIDARR_PORT}
-    depends_on:
-      deluge: { condition: service_healthy }
-      prowlarr: { condition: service_healthy }
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:${LIDARR_PORT}/ping"]
-
-  # =====================================
-  # SUBTITLE MANAGEMENT
-  # =====================================
-  bazarr:
-    <<: *common-properties
-    image: ${BAZARR_IMAGE}
-    container_name: bazarr
-    volumes:
-      - bazarr_config:/config
-      - ${DATA_PATH}:/data
-    ports:
       - ${BAZARR_PORT}:${BAZARR_PORT}
-    depends_on:
-      sonarr: { condition: service_healthy }
-      radarr: { condition: service_healthy }
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "curl", "-f", "http://localhost:${BAZARR_PORT}"]
-
-  # =====================================
-  # CLOUDFLARE BYPASS
-  # =====================================
-  flaresolverr:
-    <<: *common-properties
-    image: ${FLARESOLVERR_IMAGE}
-    container_name: flaresolverr
-    ports:
       - ${FLARESOLVERR_PORT}:${FLARESOLVERR_PORT}
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${MULLVAD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${MULLVAD_ADDRESSES}
+      - TZ=${TZ}
+      - DOT=on
+      - DNS_ADDRESS=10.64.0.1
+      - DNS_KEEP_NAMESERVER=off
+      - BLOCK_MALICIOUS=on
+      - BLOCK_ADS=off
+    volumes:
+      - gluetun_data:/gluetun
+      - ./gluetun_backup:/backup:ro
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${FLARESOLVERR_PORT}/health"]
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # =====================================
-  # MEDIA TRANSCODING
-  # =====================================
+  # -----------------------------------------------------------------
+  # TORRENT CLIENT - TRANSMISSION (VPN-protected)
+  # -----------------------------------------------------------------
+  transmission:
+    <<: *common-properties
+    image: ${TRANSMISSION_IMAGE}
+    container_name: transmission
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - USER=${TRANSMISSION_USER}
+      - PASS=${TRANSMISSION_PASS}
+      - PEERPORT=51413
+      - TRANSMISSION_DOWNLOAD_DIR=/downloads/complete
+      - TRANSMISSION_INCOMPLETE_DIR_ENABLED=true
+      - TRANSMISSION_INCOMPLETE_DIR=/downloads/incomplete
+      - TRANSMISSION_WATCH_DIR_ENABLED=true
+      - TRANSMISSION_WATCH_DIR=/watch
+      # Seeding limits
+      - TRANSMISSION_RATIO_LIMIT=${TRANSMISSION_RATIO_LIMIT}
+      - TRANSMISSION_RATIO_LIMIT_ENABLED=${TRANSMISSION_RATIO_LIMIT_ENABLED}
+      - TRANSMISSION_IDLE_SEEDING_LIMIT=${TRANSMISSION_IDLE_SEEDING_LIMIT}
+      - TRANSMISSION_IDLE_SEEDING_LIMIT_ENABLED=${TRANSMISSION_IDLE_SEEDING_LIMIT_ENABLED}
+      # Speed limits
+      - TRANSMISSION_SPEED_LIMIT_DOWN=${TRANSMISSION_SPEED_LIMIT_DOWN}
+      - TRANSMISSION_SPEED_LIMIT_DOWN_ENABLED=${TRANSMISSION_SPEED_LIMIT_DOWN_ENABLED}
+      - TRANSMISSION_SPEED_LIMIT_UP=${TRANSMISSION_SPEED_LIMIT_UP}
+      - TRANSMISSION_SPEED_LIMIT_UP_ENABLED=${TRANSMISSION_SPEED_LIMIT_UP_ENABLED}
+      # Peer limits
+      - TRANSMISSION_PEER_LIMIT_GLOBAL=${TRANSMISSION_PEER_LIMIT_GLOBAL}
+      - TRANSMISSION_PEER_LIMIT_PER_TORRENT=${TRANSMISSION_PEER_LIMIT_PER_TORRENT}
+    volumes:
+      - transmission_config:/config
+      - ${DATA_PATH}/torrents:/downloads
+      - ${DATA_PATH}/torrents/watch:/watch
+    # Healthcheck correctly enabled with proper indentation
+    healthcheck: *transmission-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # -----------------------------------------------------------------
+  # INDEXER MANAGEMENT
+  # -----------------------------------------------------------------
+  prowlarr:
+    <<: *common-properties
+    image: ${PROWLARR_IMAGE}
+    container_name: prowlarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - prowlarr_config:/config
+    healthcheck: *prowlarr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # -----------------------------------------------------------------
+  # TV SERIES MANAGEMENT - SONARR (VPN-protected)
+  # -----------------------------------------------------------------
+  sonarr:
+    <<: *common-properties
+    image: ${SONARR_IMAGE}
+    container_name: sonarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - SONARR__RECYCLBIN=${SONARR_RECYCLE_BIN}
+    volumes:
+      - sonarr_config:/config
+      - ${DATA_PATH}:/data
+    healthcheck: *sonarr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # -----------------------------------------------------------------
+  # MOVIE MANAGEMENT - RADARR (VPN-protected)
+  # -----------------------------------------------------------------
+  radarr:
+    <<: *common-properties
+    image: ${RADARR_IMAGE}
+    container_name: radarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - RADARR__RECYCLBIN=${RADARR_RECYCLE_BIN}
+    volumes:
+      - radarr_config:/config
+      - ${DATA_PATH}:/data
+    healthcheck: *radarr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # -----------------------------------------------------------------
+  # MUSIC MANAGEMENT - LIDARR (VPN-protected)
+  # -----------------------------------------------------------------
+  lidarr:
+    <<: *common-properties
+    image: ${LIDARR_IMAGE}
+    container_name: lidarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - LIDARR__RECYCLBIN=${LIDARR_RECYCLE_BIN}
+    volumes:
+      - lidarr_config:/config
+      - ${DATA_PATH}:/data
+    healthcheck: *lidarr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # -----------------------------------------------------------------
+  # SUBTITLE MANAGEMENT - BAZARR (VPN-protected)
+  # -----------------------------------------------------------------
+  bazarr:
+    <<: *common-properties
+    image: ${BAZARR_IMAGE}
+    container_name: bazarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - bazarr_config:/config
+      - ${DATA_PATH}:/data
+    healthcheck: *bazarr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # -----------------------------------------------------------------
+  # CLOUDFLARE BYPASS - FLARESOLVERR (VPN-protected)
+  # -----------------------------------------------------------------
+  flaresolverr:
+    <<: *common-properties
+    image: ${FLARESOLVERR_IMAGE}
+    container_name: flaresolverr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # -----------------------------------------------------------------
+  # REQUEST MANAGEMENT - OVERSEERR (direct access)
+  # -----------------------------------------------------------------
+  overseerr:
+    <<: *common-properties
+    image: ${OVERSEERR_IMAGE}
+    container_name: overseerr
+    networks:
+      - arr-network
+    ports:
+      - ${OVERSEERR_PORT}:5055
+    volumes:
+      - overseerr_config:/config
+    healthcheck: *overseerr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # -----------------------------------------------------------------
+  # MEDIA TRANSCODING - TDARR (direct access)
+  # -----------------------------------------------------------------
   tdarr:
     <<: *common-properties
     image: ${TDARR_IMAGE}
     container_name: tdarr
+    networks:
+      - arr-network
     environment:
-      # PUID, PGID, TZ are inherited
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
       - UMASK_SET=${UMASK}
       - serverIP=0.0.0.0
       - serverPort=${TDARR_SERVER_PORT}
@@ -165,19 +349,51 @@ services:
       - tdarr_server:/app/server
       - tdarr_configs:/app/configs
       - tdarr_logs:/app/logs
-      - tdarr_cache:/temp
+      - ${DATA_PATH}/tdarr_cache:/temp
       - ${DATA_PATH}:/data
       - ${TDARR_PLUGINS_PATH}:/app/server/Tdarr/Plugins/Local
     ports:
       - ${TDARR_WEBUI_PORT}:${TDARR_WEBUI_PORT}
       - ${TDARR_SERVER_PORT}:${TDARR_SERVER_PORT}
-    healthcheck:
-      <<: *arr-healthcheck
-      test: ["CMD", "curl", "-f", "http://localhost:${TDARR_WEBUI_PORT}"]
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
 
-  # =====================================
-  # AUTO UPDATER
-  # =====================================
+  # -----------------------------------------------------------------
+  # QUALITY PROFILE SYNC - RECYCLARR (VPN-protected)
+  # -----------------------------------------------------------------
+  recyclarr:
+    <<: *common-properties
+    image: ghcr.io/recyclarr/recyclarr:latest
+    container_name: recyclarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    volumes:
+      - ./recyclarr.yml:/config/recyclarr.yml:ro
+      - recyclarr_config:/config
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - CRON_SCHEDULE=@daily
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - RADARR_API_KEY=${RADARR_API_KEY}
+    healthcheck: *recyclarr-healthcheck
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # -----------------------------------------------------------------
+  # CONTAINER MONITORING - WATCHTOWER & PORTAINER (direct access)
+  # -----------------------------------------------------------------
   watchtower:
     image: containrrr/watchtower
     container_name: watchtower
@@ -190,16 +406,18 @@ services:
     networks:
       - arr-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
-  # =====================================
-  # CONTAINER MANAGEMENT
-  # =====================================
   portainer:
     image: ${PORTAINER_IMAGE}
     container_name: portainer
     restart: unless-stopped
     ports:
-      - 9000:9000
       - 9443:9443
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -207,18 +425,29 @@ services:
       - ${PORTAINER_LICENSE}:/license
     networks:
       - arr-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
+# -------------------------------------------------------------------
+# VOLUMES & NETWORK
+# -------------------------------------------------------------------
 volumes:
-  deluge_config:
+  gluetun_data:
+  transmission_config:
   prowlarr_config:
   sonarr_config:
   radarr_config:
   lidarr_config:
   bazarr_config:
+  overseerr_config:
   tdarr_server:
   tdarr_configs:
   tdarr_logs:
-  tdarr_cache:
+  recyclarr_config:
   portainer_data:
 
 networks:
@@ -227,5 +456,3 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/16
-    driver_opts:
-      com.docker.network.bridge.name: br-arr
